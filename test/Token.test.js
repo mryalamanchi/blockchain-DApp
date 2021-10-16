@@ -1,4 +1,4 @@
-import { toTokens, EVM_REVERT_MSG } from './helper';
+import { tokens, EVM_REVERT_MSG } from './helper';
 
 const Token = artifacts.require('./Token');
 
@@ -6,7 +6,7 @@ require('chai').use(require('chai-as-promised')).should();
 
 contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
   let token;
-  let totalSupply = toTokens(1000000).toString();
+  let totalSupply = tokens(1000000).toString();
 
   beforeEach(async () => {
     token = await Token.new();
@@ -60,7 +60,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
 
     describe('success', async () => {
       beforeEach(async () => {
-        transferAmount = toTokens(100);
+        transferAmount = tokens(100);
         transferResult = await token.transfer(receiverAddress, transferAmount, {
           from: deployerAddress,
         });
@@ -69,15 +69,14 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
       it('transfers token balances', async () => {
         // Balance after transfer
         const newDeployerBalance = await token.balanceOf(deployerAddress);
-        newDeployerBalance.toString().should.equal(toTokens(999900).toString());
+        newDeployerBalance.toString().should.equal(tokens(999900).toString());
 
         const newReceiverBalance = await token.balanceOf(receiverAddress);
-        newReceiverBalance.toString().should.equal(toTokens(100).toString());
+        newReceiverBalance.toString().should.equal(tokens(100).toString());
       });
 
       it('emits a transfer event', async () => {
         const log = transferResult.logs[0];
-
         log.event.should.eq('Transfer');
 
         const transferEvent = log.args;
@@ -100,7 +99,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
     describe('failure', async () => {
       it('rejects insufficient balances', async () => {
         let invalidAmount;
-        invalidAmount = toTokens(100000000); // 100 million - greater than total supply
+        invalidAmount = tokens(100000000); // 100 million - greater than total supply
 
         await token
           .transfer(receiverAddress, invalidAmount, {
@@ -123,7 +122,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
     let approvalAmount;
 
     beforeEach(async () => {
-      approvalAmount = toTokens(100);
+      approvalAmount = tokens(100);
       approvalResult = await token.approve(exchangeAddress, approvalAmount, {
         from: deployerAddress,
       });
@@ -170,7 +169,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
     let transferAmount;
 
     beforeEach(async () => {
-      transferAmount = toTokens(100);
+      transferAmount = tokens(100);
 
       // approve allowance to the exchange
       await token.approve(exchangeAddress, transferAmount, {
@@ -194,10 +193,10 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
       it('transfers token balances', async () => {
         // Balance after transfer
         const newDeployerBalance = await token.balanceOf(deployerAddress);
-        newDeployerBalance.toString().should.equal(toTokens(999900).toString());
+        newDeployerBalance.toString().should.equal(tokens(999900).toString());
 
         const newReceiverBalance = await token.balanceOf(receiverAddress);
-        newReceiverBalance.toString().should.equal(toTokens(100).toString());
+        newReceiverBalance.toString().should.equal(tokens(100).toString());
       });
 
       it('reset the allowance', async () => {
@@ -211,7 +210,6 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
 
       it('emits a transfer event', async () => {
         const log = transferResult.logs[0];
-
         log.event.should.eq('Transfer');
 
         const transferEvent = log.args;
@@ -240,7 +238,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
 
       it('rejects insufficient balances', async () => {
         let invalidAmount;
-        invalidAmount = toTokens(100000000); // 100 million - greater than sender's balance
+        invalidAmount = tokens(100000000); // 100 million - greater than sender's balance
 
         await token
           .transferFrom(deployerAddress, receiverAddress, invalidAmount, {
@@ -251,7 +249,7 @@ contract('Token', ([deployerAddress, receiverAddress, exchangeAddress]) => {
 
       it('rejects insufficient allowance for the exchange', async () => {
         let invalidAmount;
-        invalidAmount = toTokens(100000000); // 100 million - greater than allowance of exchange
+        invalidAmount = tokens(100000000); // 100 million - greater than allowance of exchange
 
         await token
           .transferFrom(deployerAddress, receiverAddress, invalidAmount, {
