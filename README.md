@@ -25,3 +25,25 @@ It standardizes the tokens to have certain functions, business logic in the smar
 - Transfer
 - Approve allowance for exchange
 - Delegate transfer to exchange
+
+## Smart Contracts
+
+> Two smart contracts are created in this project and each have different responsibilities.
+
+- Token smart contract
+- Exchange smart contract
+
+### Token contract
+
+It conforms the Ethereum `ERC-20` token standard, it encapsulates:
+
+- `what is the token` (name, symbol, decimals etc.)
+- highest level policies of `how the token works` (transfer, approve, delegate to exchange actions etc.)
+
+`Token contract` will be used by the `exchange contract`.
+
+### Exchange contract
+
+It is the lower level details contract, it is being used to handle transactions from the user accounts, and it will utilize the `token contract`.
+
+- Responsible for `doing transfers for Users` by calling token contract on their behaves.
