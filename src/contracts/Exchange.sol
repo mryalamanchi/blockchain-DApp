@@ -13,7 +13,7 @@ import "./Token.sol";
 // [X] Deposit tokens
 // [X] Withdraw tokens
 // [X] Check balances
-// [ ] Make order
+// [X] Make order
 // [ ] Cancel order
 // [ ] Fill order
 // [ ] Charge fees - earn from every single trade
@@ -26,12 +26,23 @@ contract Exchange {
 	address constant ETHER_ADDRESS = address(0); // store Ether in tokens mapping with blank address
 	mapping(address => mapping(address => uint256)) public tokens;
 	mapping(uint256 => _Order) public orders;
+	mapping(uint256 =>  bool) public cancelledOrder;
 	uint256 public orderCount;
 
 	// Events
 	event Deposit(address tokenAddress, address userAddress, uint256 amount, uint256 userBalanceInExchange);
 	event Withdraw(address tokenAddress, address userAddress, uint256 amount, uint256 userBalanceInExchange);
 	event OrderCreated(
+		uint256 id,
+		address userAddress,
+		address tokenGetAddress,
+		uint amountGet,
+		address tokenGiveAddress,
+		uint amountGive,
+		uint timestamp
+	);
+	event OrderCancelled
+	(
 		uint256 id,
 		address userAddress,
 		address tokenGetAddress,
@@ -135,5 +146,18 @@ contract Exchange {
 		orders[orderCount] = _Order(orderCount, msg.sender, _tokenGetAddress, _amountGet, _tokenGiveAddress, _amountGive, now); // now in seconds (epoch)
 
 		emit OrderCreated(orderCount, msg.sender, _tokenGetAddress, _amountGet, _tokenGiveAddress, _amountGive, now);
+	}
+
+	function cancelOrder(uint256 _id) public
+	{
+		_Order storage _order = orders[_id]; // _Order type fetched from "storage" from blockchain
+		// Must be "my" order
+		require(address(_order.userAddress) == msg.sender);
+		// Order must exist (struct will return 0 on properties if it does not exist)
+		require(_order.id == _id);
+
+		cancelledOrder[_id] = true;
+
+		emit OrderCancelled(orderCount, msg.sender, _order.tokenGetAddress, _order.amountGet, _order.tokenGiveAddress, _order.amountGive, now);
 	}
 }

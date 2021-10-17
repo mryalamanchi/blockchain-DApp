@@ -7,7 +7,7 @@ require('chai').use(require('chai-as-promised')).should();
 
 contract.only(
   'Exchange',
-  ([deployerAddress, feeAccountAddress, accountAddress1]) => {
+  ([deployerAddress, feeAccountAddress, accountAddress1, accountAddress2]) => {
     let token;
     let exchange;
     const feePercent = 10;
@@ -349,8 +349,9 @@ contract.only(
       });
     });
 
-    describe.only('making orders', async () => {
+    describe('making orders', async () => {
       let orderGetAmount;
+
       let orderGiveAmount;
       let makeOrderResult;
 
@@ -369,7 +370,7 @@ contract.only(
         );
       });
 
-      it('After creating the first order, the order count should be 1', async () => {
+      it('After creating the first order, the order count should be 1 and saved order record is correct', async () => {
         const orderCount = await exchange.orderCount();
         orderCount.toString().should.equal('1');
 
@@ -402,6 +403,136 @@ contract.only(
         order.timestamp
           .toString()
           .length.should.be.at.least(1, 'timestamp is present');
+      });
+
+      it('emits an "OrderCreated" event with correct details', async () => {
+        const log = makeOrderResult.logs[0];
+        log.event.should.eq('OrderCreated');
+        const orderCreatedEvent = log.args;
+
+        orderCreatedEvent.userAddress
+          .toString()
+          .should.equals(
+            accountAddress1,
+            'user creating this order is correct'
+          );
+        orderCreatedEvent.tokenGetAddress
+          .toString()
+          .should.equals(token.address, 'The order was created to get token');
+        orderCreatedEvent.amountGet
+          .toString()
+          .should.equals(
+            orderGetAmount.toString(),
+            'The amount of tokens to get is correct'
+          );
+        orderCreatedEvent.tokenGiveAddress
+          .toString()
+          .should.equals(ETHER_ADDRESS, 'The order is paid by Ether');
+        orderCreatedEvent.amountGive
+          .toString()
+          .should.equals(
+            orderGiveAmount.toString(),
+            'The amount of Ether provided is correct'
+          );
+        orderCreatedEvent.timestamp
+          .toString()
+          .length.should.be.at.least(1, 'timestamp is present');
+      });
+    });
+
+    describe.only('order actions', async () => {
+      let orderGetAmount; // user order Get amount
+      let orderGiveAmount; // user order Give amount
+
+      let makeOrderResult;
+
+      beforeEach(async () => {
+        orderGiveAmount = ether(1);
+        orderGetAmount = tokens(1);
+        // user deposits Ether
+        await exchange.depositEther({
+          from: accountAddress1,
+          value: orderGiveAmount,
+        });
+
+        // user makes an order to buy tokens with Ether
+        await exchange.makeOrder(
+          token.address,
+          orderGetAmount,
+          ETHER_ADDRESS,
+          orderGiveAmount,
+          { from: accountAddress1 }
+        );
+      });
+
+      describe('cancelling orders', async () => {
+        let orderCancellationResult;
+
+        describe('success', async () => {
+          beforeEach('success', async () => {
+            orderCancellationResult = await exchange.cancelOrder('1', {
+              from: accountAddress1,
+            });
+          });
+
+          it('Order should be marked as cancelled', async () => {
+            const orderCancelled = await exchange.cancelledOrder(1);
+            orderCancelled.should.equal(true);
+          });
+
+          it('emits an "OrderCancelled" event with correct details', async () => {
+            const log = orderCancellationResult.logs[0];
+            log.event.should.eq('OrderCancelled');
+            const orderCancelledEvent = log.args;
+
+            orderCancelledEvent.userAddress
+              .toString()
+              .should.equals(
+                accountAddress1,
+                'user creating this order is correct'
+              );
+            orderCancelledEvent.tokenGetAddress
+              .toString()
+              .should.equals(
+                token.address,
+                'The order was created to get token'
+              );
+            orderCancelledEvent.amountGet
+              .toString()
+              .should.equals(
+                orderGetAmount.toString(),
+                'The amount of tokens to get is correct'
+              );
+            orderCancelledEvent.tokenGiveAddress
+              .toString()
+              .should.equals(ETHER_ADDRESS, 'The order is paid by Ether');
+            orderCancelledEvent.amountGive
+              .toString()
+              .should.equals(
+                orderGiveAmount.toString(),
+                'The amount of Ether provided is correct'
+              );
+            orderCancelledEvent.timestamp
+              .toString()
+              .length.should.be.at.least(1, 'timestamp is present');
+          });
+        });
+
+        describe('failure', async () => {
+          it('rejects invalid order ids', async () => {
+            const invalidOrderId = 99999;
+            await exchange
+              .cancelOrder(invalidOrderId, { from: accountAddress1 })
+              .should.be.rejectedWith(EVM_REVERT_MSG);
+          });
+
+          it('rejects unauthorized cancellation', async () => {
+            // Try to cancel the order from another user
+            await exchange
+              .cancelOrder('1', { from: accountAddress2 })
+              .should.be.rejectedWith(EVM_REVERT_MSG);
+          });
+        });
       });
     });
   }
