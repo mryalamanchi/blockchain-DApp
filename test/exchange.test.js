@@ -120,6 +120,88 @@ contract.only(
       });
     });
 
+    describe('withdrawing tokens', () => {
+      let withdrawAmount;
+      let withdrawTokenResult;
+
+      describe('success', () => {
+        beforeEach(async () => {
+          const userBalanceBeforeWithdrawal = tokens(1);
+          // Deposit tokens first from exchange
+          await token.approve(exchange.address, userBalanceBeforeWithdrawal, {
+            from: accountAddress1,
+          });
+          // Exchange deposit VEN Token for user
+          await exchange.depositToken(
+            token.address,
+            userBalanceBeforeWithdrawal,
+            {
+              from: accountAddress1,
+            }
+          );
+
+          withdrawAmount = tokens(1);
+
+          withdrawTokenResult = await exchange.withdrawToken(
+            token.address,
+            withdrawAmount,
+            {
+              from: accountAddress1,
+            }
+          );
+        });
+
+        it('user token balance should be 0 after withdrawing tokens', async () => {
+          const userBalanceAfterWithdrawal = await exchange.tokens(
+            token.address,
+            accountAddress1
+          );
+          userBalanceAfterWithdrawal.toString().should.equal('0');
+        });
+
+        it('emits a deposit event for tokens', async () => {
+          const log = withdrawTokenResult.logs[0];
+          log.event.should.eq('Withdraw');
+
+          const withdrawEtherEvent = log.args;
+
+          withdrawEtherEvent.tokenAddress.should.equal(
+            token.address,
+            'token address is correct'
+          );
+          withdrawEtherEvent.userAddress.should.equal(
+            accountAddress1,
+            'user address is correct'
+          );
+          withdrawEtherEvent.amount
+            .toString()
+            .should.equal(withdrawAmount.toString(), 'amount is correct');
+          withdrawEtherEvent.userBalanceInExchange
+            .toString()
+            .should.equal('0', 'user balance in exchange is correct');
+        });
+      });
+
+      describe('failure', () => {
+        it('reject Ether withdraws', async () => {
+          await exchange
+            .withdrawToken(ETHER_ADDRESS, withdrawAmount, {
+              from: accountAddress1,
+            })
+            .should.be.rejectedWith(EVM_REVERT_MSG);
+        });
+
+        it('fails for insufficient balances', async () => {
+          // Attempt the withdraw without depositing any for user
+          await exchange
+            .withdrawToken(token.address, withdrawAmount, {
+              from: accountAddress1,
+            })
+            .should.be.rejectedWith(EVM_REVERT_MSG);
+        });
+      });
+    });
+
     describe('depositing ether', () => {
       let transferAmount;
       let depositEtherResult;
@@ -171,6 +253,73 @@ contract.only(
       });
     });
 
+    describe('withdrawing ether', () => {
+      let withdrawAmount;
+      let withdrawEtherResult;
+
+      beforeEach(async () => {
+        // no need approve allowance as our coin is VEN not Ether
+        const userBalanceBeforeWithdrawal = ether(1);
+
+        await exchange.depositEther({
+          from: accountAddress1,
+          value: userBalanceBeforeWithdrawal,
+        });
+      });
+
+      describe('success', () => {
+        beforeEach(async () => {
+          // no need approve allowance as our coin is VEN not Ether
+          withdrawAmount = ether(1);
+
+          withdrawEtherResult = await exchange.withdrawEther(withdrawAmount, {
+            from: accountAddress1,
+          });
+        });
+
+        it('user Ether balance should be 0 after withdrawing Ether funds', async () => {
+          const userBalanceAfterWithdrawal = await exchange.tokens(
+            ETHER_ADDRESS,
+            accountAddress1
+          );
+          userBalanceAfterWithdrawal.toString().should.equal('0');
+        });
+
+        it('emits a deposit event for Ether', async () => {
+          const log = withdrawEtherResult.logs[0];
+          log.event.should.eq('Withdraw');
+
+          const withdrawEtherEvent = log.args;
+
+          withdrawEtherEvent.tokenAddress.should.equal(
+            ETHER_ADDRESS,
+            'ether address is correct'
+          );
+          withdrawEtherEvent.userAddress.should.equal(
+            accountAddress1,
+            'user address is correct'
+          );
+          withdrawEtherEvent.amount
+            .toString()
+            .should.equal(withdrawAmount.toString(), 'amount is correct');
+          withdrawEtherEvent.userBalanceInExchange
+            .toString()
+            .should.equal('0', 'user balance in exchange is correct');
+        });
+      });
+
+      describe('success', () => {
+        it('rejects withdraws for insufficient balances', async () => {
+          const withdrawAmountUserCantAfford = ether(2000);
+          await exchange
+            .withdrawEther(withdrawAmountUserCantAfford, {
+              from: accountAddress1,
+            })
+            .should.be.rejectedWith(EVM_REVERT_MSG);
+        });
+      });
+    });
+
     describe('fallback', () => {
       it('reverts (refunds) when Ether is sent', async () => {
         await exchange
@@ -179,6 +328,24 @@ contract.only(
             value: ether(1),
           })
           .should.be.rejectedWith(EVM_REVERT_MSG);
+      });
+    });
+
+    describe.only('checking balances', async () => {
+      let depositAmount;
+
+      beforeEach(async () => {
+        depositAmount = ether(1);
+        exchange.depositEther({ from: accountAddress1, value: depositAmount });
+      });
+
+      it('returns user balance', async () => {
+        const userBalance = await exchange.balanceOf(
+          ETHER_ADDRESS,
+          accountAddress1
+        );
+
+        userBalance.toString().should.equal(depositAmount.toString());
       });
     });
   }

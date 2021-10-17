@@ -9,10 +9,10 @@ import "./Token.sol";
 // TODO:
 // [X] Set the fee (for when deploying smart contract etc.)
 // [X] Deposit Ether
-// [ ] Withdraw Ether
+// [X] Withdraw Ether
 // [X] Deposit tokens
-// [ ] Withdraw tokens
-// [ ] Check balances
+// [X] Withdraw tokens
+// [X] Check balances
 // [ ] Make order
 // [ ] Cancel order
 // [ ] Fill order
@@ -28,6 +28,7 @@ contract Exchange {
 
 	// Events
 	event Deposit(address tokenAddress, address userAddress, uint256 amount, uint256 userBalanceInExchange);
+	event Withdraw(address tokenAddress, address userAddress, uint256 amount, uint256 userBalanceInExchange);
 
 	constructor(address _feeAccountAddress, uint256 _feePercent) public {
 		feeAccountAddress = _feeAccountAddress;
@@ -55,6 +56,25 @@ contract Exchange {
 		emit Deposit(_tokenAddress, msg.sender, _amount, userBalanceInExchangeAfterDeposite);
 	}
 
+	function withdrawToken(address _tokenAddress, uint _amount) public
+	{
+		// reject if is ether address
+		require(_tokenAddress != ETHER_ADDRESS);
+
+		uint256 userBalanceBeforeWithdrawl = tokens[_tokenAddress][msg.sender];
+		// reject if withdraw invalid amount (not sufficient)
+		require(userBalanceBeforeWithdrawl >= _amount);
+		// reduce amount recorded in exchange contract
+		tokens[_tokenAddress][msg.sender] = userBalanceBeforeWithdrawl.sub(_amount);
+
+		// reduce amount recorded in token contract and transfer back to user
+		require(Token(_tokenAddress).transfer(msg.sender, _amount));
+
+		// emit event
+		uint256 userBalanceAfterWithdrawl = tokens[_tokenAddress][msg.sender];
+		emit Withdraw(_tokenAddress, msg.sender, _amount, userBalanceAfterWithdrawl);
+	}
+
 
 	function depositEther() payable public
 	{
@@ -66,5 +86,23 @@ contract Exchange {
 
 		uint256 userBalanceInExchangeAfterDeposite = tokens[ETHER_ADDRESS][msg.sender];
 		emit Deposit(ETHER_ADDRESS, msg.sender, msg.value, userBalanceInExchangeAfterDeposite);
+	}
+
+	function withdrawEther(uint _amount) public
+	{
+		uint256 userBalanceBeforeWithrawal = tokens[ETHER_ADDRESS][msg.sender];
+		require(userBalanceBeforeWithrawal >= _amount);
+		tokens[ETHER_ADDRESS][msg.sender] = userBalanceBeforeWithrawal.sub(_amount);
+
+		// transfer back to the withdrawer
+		msg.sender.transfer(_amount);
+
+		uint256 userBalanceAfterWithdrawl = tokens[ETHER_ADDRESS][msg.sender];
+		emit Withdraw(ETHER_ADDRESS, msg.sender, _amount, userBalanceAfterWithdrawl);
+	}
+
+	function balanceOf(address _tokenOrEtherAddress, address _userAddress) public view returns (uint256)
+	{
+		return tokens[_tokenOrEtherAddress][_userAddress];
 	}
 }
