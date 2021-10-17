@@ -14,9 +14,9 @@ import "./Token.sol";
 // [X] Withdraw tokens
 // [X] Check balances
 // [X] Make order
-// [ ] Cancel order
-// [ ] Fill order
-// [ ] Charge fees - earn from every single trade
+// [X] Cancel order
+// [X] Fill order
+// [X] Charge fees - earn from every single trade
 
 contract Exchange {
 	using SafeMath for uint;
@@ -27,6 +27,7 @@ contract Exchange {
 	mapping(address => mapping(address => uint256)) public tokens;
 	mapping(uint256 => _Order) public orders;
 	mapping(uint256 =>  bool) public cancelledOrder;
+	mapping(uint256 =>  bool) public filledOrder;
 	uint256 public orderCount;
 
 	// Events
@@ -51,15 +52,25 @@ contract Exchange {
 		uint amountGive,
 		uint timestamp
 	);
+	event Trade(
+		uint id,
+		address userAddress,
+		address addrOfTokenForUserToGet,
+		uint amountGet,
+		address addrOfTokenGivenByUser,
+		uint amountGive,
+		address addrOfUserFillingOrder,
+		uint timestamp
+	);
 
 	// Model the order
 	struct _Order
 	{
 		uint256 id;
 		address userAddress;
-		address tokenGetAddress;
+		address addrOfTokenForUserToGet;
 		uint amountGet;
-		address tokenGiveAddress;
+		address addrOfTokenGivenByUser;
 		uint amountGive;
 		uint timestamp;
 	}
@@ -140,12 +151,12 @@ contract Exchange {
 		return tokens[_tokenOrEtherAddress][_userAddress];
 	}
 
-	function makeOrder(address _tokenGetAddress, uint256 _amountGet, address _tokenGiveAddress, uint256 _amountGive) public
+	function makeOrder(address _addrOfTokenForUserToGet, uint256 _amountGet, address _addrOfTokenGivenByUser, uint256 _amountGive) public
 	{
 		orderCount = orderCount.add(1);
-		orders[orderCount] = _Order(orderCount, msg.sender, _tokenGetAddress, _amountGet, _tokenGiveAddress, _amountGive, now); // now in seconds (epoch)
+		orders[orderCount] = _Order(orderCount, msg.sender, _addrOfTokenForUserToGet, _amountGet, _addrOfTokenGivenByUser, _amountGive, now); // now in seconds (epoch)
 
-		emit OrderCreated(orderCount, msg.sender, _tokenGetAddress, _amountGet, _tokenGiveAddress, _amountGive, now);
+		emit OrderCreated(orderCount, msg.sender, _addrOfTokenForUserToGet, _amountGet, _addrOfTokenGivenByUser, _amountGive, now);
 	}
 
 	function cancelOrder(uint256 _id) public
@@ -158,6 +169,45 @@ contract Exchange {
 
 		cancelledOrder[_id] = true;
 
-		emit OrderCancelled(orderCount, msg.sender, _order.tokenGetAddress, _order.amountGet, _order.tokenGiveAddress, _order.amountGive, now);
+		emit OrderCancelled(orderCount, msg.sender, _order.addrOfTokenForUserToGet, _order.amountGet, _order.addrOfTokenGivenByUser, _order.amountGive, now);
+	}
+
+	function fillOrder(uint256 _id) public
+	{
+		require(_id > 0 && _id <= orderCount);
+		require(!filledOrder[_id]);
+		require(!cancelledOrder[_id]);
+
+		_Order storage _order = orders[_id];
+		_trade(_order.id, _order.userAddress, _order.addrOfTokenForUserToGet, _order.amountGet, _order.addrOfTokenGivenByUser, _order.amountGive);
+
+		filledOrder[_order.id] = true;
+	}
+
+	function _trade(uint256 _orderId, address _userAddress, address _addrOfTokenForUserToGet, uint256 _amountGet, address _addrOfTokenGivenByUser, uint256 _amountGive) internal {
+		// Execute trade
+		// msg sender is the person filling order
+		// _userAddress is the user creates the order
+
+		// Fee paidy by the user filling the order a.k.a. msg.sender
+		// Fee deducted from _amountGet
+
+		uint256 _feeAmount = _amountGet.mul(feePercent).div(100);
+		// user getting
+		// tokens[_addrOfTokenForUserToGet][msg.sender] = tokens[_addrOfTokenForUserToGet][msg.sender].sub(_amountGet.add(_feeAmount)); // order filler need to pay for fee amount as user has paid for them
+		tokens[_addrOfTokenForUserToGet][msg.sender] = tokens[_addrOfTokenForUserToGet][msg.sender].sub(_amountGet.add(_feeAmount)); // order filler need to pay for fee amount as user has paid for them
+		tokens[_addrOfTokenForUserToGet][_userAddress] = tokens[_addrOfTokenForUserToGet][_userAddress].add(_amountGet);
+		
+		// Charge fees
+		tokens[_addrOfTokenForUserToGet][feeAccountAddress] = tokens[_addrOfTokenForUserToGet][feeAccountAddress].add(_feeAmount);
+
+		// user paying
+		tokens[_addrOfTokenGivenByUser][_userAddress] = tokens[_addrOfTokenGivenByUser][_userAddress].sub(_amountGive);
+		tokens[_addrOfTokenGivenByUser][msg.sender] = tokens[_addrOfTokenGivenByUser][msg.sender].add(_amountGive);
+
+
+
+		// Emit Trade event
+		emit Trade(_orderId, _userAddress, _addrOfTokenForUserToGet, _amountGet, _addrOfTokenGivenByUser, _amountGive, msg.sender, now);
 	}
 }

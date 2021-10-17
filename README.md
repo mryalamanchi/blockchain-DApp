@@ -51,5 +51,6 @@ Responsible for `doing transfers for Users` by calling token contract on their b
 - `Deposit` token or Ether
 - `Withdraw` token or Ether
 - `Create` order to actually exchange from Ether to token or vice versa.
+- `Filling` order (executing trading) and pay the fee to the feeAccount. (As we charge from users)
 - `Cancel` an order created by `myself`
 - `Get balance` of `myself` as a user

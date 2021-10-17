@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-expressions */
 import { tokens, ether, EVM_REVERT_MSG, ETHER_ADDRESS } from './helper';
 
 const Token = artifacts.require('./Token');
@@ -382,7 +383,7 @@ contract.only(
             accountAddress1,
             'user creating this order is correct'
           );
-        order.tokenGetAddress
+        order.addrOfTokenForUserToGet
           .toString()
           .should.equals(token.address, 'The order was created to get token');
         order.amountGet
@@ -391,7 +392,7 @@ contract.only(
             orderGetAmount.toString(),
             'The amount of tokens to get is correct'
           );
-        order.tokenGiveAddress
+        order.addrOfTokenGivenByUser
           .toString()
           .should.equals(ETHER_ADDRESS, 'The order is paid by Ether');
         order.amountGive
@@ -441,28 +442,178 @@ contract.only(
     });
 
     describe.only('order actions', async () => {
-      let orderGetAmount; // user order Get amount
-      let orderGiveAmount; // user order Give amount
+      let userOneOrderGiveAmount;
+      let userOneOrderGetAmount;
+
+      let userTwoOrderGiveAmount;
 
       let makeOrderResult;
 
       beforeEach(async () => {
-        orderGiveAmount = ether(1);
-        orderGetAmount = tokens(1);
-        // user deposits Ether
+        userOneOrderGiveAmount = ether(1);
+        userOneOrderGetAmount = tokens(1);
+
+        // Below code prepares balances for user 1 (ether) and user 2 (tokens) for testing purposes
+
+        // 1. user 1 deposits Ether only
         await exchange.depositEther({
           from: accountAddress1,
-          value: orderGiveAmount,
+          value: userOneOrderGiveAmount,
+        });
+
+        // 2. give tokens to users2
+        const userTwoStartOffBalance = tokens(100);
+        userTwoOrderGiveAmount = tokens(2);
+
+        // deployer transfer tokens to user2 (so no need to approve as no need to use exchange)
+        await token.transfer(accountAddress2, userTwoStartOffBalance, {
+          from: deployerAddress,
+        });
+        // user2 deposits tokens only
+        await token.approve(exchange.address, userTwoOrderGiveAmount, {
+          from: accountAddress2,
+        });
+        await exchange.depositToken(token.address, userTwoOrderGiveAmount, {
+          from: accountAddress2,
         });
 
         // user makes an order to buy tokens with Ether
         await exchange.makeOrder(
           token.address,
-          orderGetAmount,
+          userOneOrderGetAmount,
           ETHER_ADDRESS,
-          orderGiveAmount,
+          userOneOrderGiveAmount,
           { from: accountAddress1 }
         );
+      });
+
+      describe.only('filling orders', async () => {
+        let fillOrderResult;
+
+        describe('success', async () => {
+          beforeEach(async () => {
+            // user2 fills order
+            fillOrderResult = await exchange.fillOrder('1', {
+              from: accountAddress2,
+            });
+          });
+
+          it('executes the trade & charges fees', async () => {
+            // Reminder: testing using user2 as order filler
+            let userOneBalance = await exchange.balanceOf(
+              token.address,
+              accountAddress1
+            );
+            userOneBalance
+              .toString()
+              .should.equal(
+                userOneOrderGetAmount.toString(),
+                'User 1 received 1 token'
+              );
+
+            let userTwoBalance = await exchange.balanceOf(
+              ETHER_ADDRESS,
+              accountAddress2
+            );
+            userTwoBalance
+              .toString()
+              .should.equal(ether(1).toString(), 'User 2 received 1 ether');
+
+            userOneBalance = await exchange.balanceOf(
+              ETHER_ADDRESS,
+              accountAddress1
+            );
+            userOneBalance
+              .toString()
+              .should.equal('0', 'User 1 ether deducted');
+
+            userTwoBalance = await exchange.balanceOf(
+              token.address,
+              accountAddress2
+            );
+            userTwoBalance
+              .toString()
+              .should.equal(
+                tokens(0.9).toString(),
+                'User 2 tokens deducted with fee applied '
+              );
+
+            // 10 percent fee always need to be paid
+            const feeAccountBalance = await exchange.balanceOf(
+              token.address,
+              feeAccountAddress
+            );
+            feeAccountBalance
+              .toString()
+              .should.equal(tokens(0.1).toString(), 'feeAccount received fee');
+          });
+
+          it('updates filled orders', async () => {
+            const isOrderFiled = await exchange.filledOrder(1);
+            isOrderFiled.should.equal(true);
+          });
+
+          it('emits a "Trade" event', () => {
+            const log = fillOrderResult.logs[0];
+            log.event.should.eq('Trade');
+            const event = log.args;
+            event.id.toString().should.equal('1', 'id is correct');
+            event.userAddress.should.equal(
+              accountAddress1,
+              'user that want to trade"s address is correct'
+            );
+            event.addrOfTokenForUserToGet.should.equal(
+              token.address,
+              'address of token user 1 wants is correct'
+            );
+            event.amountGet
+              .toString()
+              .should.equal(tokens(1).toString(), 'amountGet is correct');
+            event.addrOfTokenGivenByUser.should.equal(
+              ETHER_ADDRESS,
+              'address of token user 1 paid is correct'
+            );
+            event.amountGive
+              .toString()
+              .should.equal(ether(1).toString(), 'amountGive is correct');
+            event.addrOfUserFillingOrder.should.equal(
+              accountAddress2,
+              'address of the user filling the order is correct'
+            );
+            event.timestamp
+              .toString()
+              .length.should.be.at.least(1, 'timestamp is present');
+          });
+        });
+
+        describe('failure', () => {
+          it('rejects invalid order ids', () => {
+            const invalidOrderId = 99999;
+            exchange
+              .fillOrder(invalidOrderId, { from: accountAddress2 })
+              .should.be.rejectedWith(EVM_REVERT_MSG);
+          });
+
+          it('rejects already-filled orders', () => {
+            // Fill the order
+            exchange.fillOrder('1', { from: accountAddress2 }).should.be
+              .fulfilled;
+            // Try to fill it again
+            exchange
+              .fillOrder('1', { from: accountAddress2 })
+              .should.be.rejectedWith(EVM_REVERT_MSG);
+          });
+
+          it('rejects cancelled orders', () => {
+            // Cancel the order
+            exchange.cancelOrder('1', { from: accountAddress1 }).should.be
+              .fulfilled;
+            // Try to fill the order
+            exchange
+              .fillOrder('1', { from: accountAddress2 })
+              .should.be.rejectedWith(EVM_REVERT_MSG);
+          });
+        });
       });
 
       describe('cancelling orders', async () => {
@@ -500,7 +651,7 @@ contract.only(
             orderCancelledEvent.amountGet
               .toString()
               .should.equals(
-                orderGetAmount.toString(),
+                userOneOrderGetAmount.toString(),
                 'The amount of tokens to get is correct'
               );
             orderCancelledEvent.tokenGiveAddress
@@ -509,7 +660,7 @@ contract.only(
             orderCancelledEvent.amountGive
               .toString()
               .should.equals(
-                orderGiveAmount.toString(),
+                userOneOrderGiveAmount.toString(),
                 'The amount of Ether provided is correct'
               );
             orderCancelledEvent.timestamp
