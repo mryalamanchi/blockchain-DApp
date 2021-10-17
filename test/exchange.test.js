@@ -331,7 +331,7 @@ contract.only(
       });
     });
 
-    describe.only('checking balances', async () => {
+    describe('checking balances', async () => {
       let depositAmount;
 
       beforeEach(async () => {
@@ -346,6 +346,62 @@ contract.only(
         );
 
         userBalance.toString().should.equal(depositAmount.toString());
+      });
+    });
+
+    describe.only('making orders', async () => {
+      let orderGetAmount;
+      let orderGiveAmount;
+      let makeOrderResult;
+
+      beforeEach(async () => {
+        orderGetAmount = tokens(1);
+        orderGiveAmount = ether(1);
+
+        makeOrderResult = await exchange.makeOrder(
+          token.address,
+          orderGetAmount,
+          ETHER_ADDRESS,
+          orderGetAmount,
+          {
+            from: accountAddress1,
+          }
+        );
+      });
+
+      it('After creating the first order, the order count should be 1', async () => {
+        const orderCount = await exchange.orderCount();
+        orderCount.toString().should.equal('1');
+
+        const order = await exchange.orders('1');
+        order.id.toString().should.equals('1', 'order id is correct');
+        order.userAddress
+          .toString()
+          .should.equals(
+            accountAddress1,
+            'user creating this order is correct'
+          );
+        order.tokenGetAddress
+          .toString()
+          .should.equals(token.address, 'The order was created to get token');
+        order.amountGet
+          .toString()
+          .should.equals(
+            orderGetAmount.toString(),
+            'The amount of tokens to get is correct'
+          );
+        order.tokenGiveAddress
+          .toString()
+          .should.equals(ETHER_ADDRESS, 'The order is paid by Ether');
+        order.amountGive
+          .toString()
+          .should.equals(
+            orderGiveAmount.toString(),
+            'The amount of Ether provided is correct'
+          );
+        order.timestamp
+          .toString()
+          .length.should.be.at.least(1, 'timestamp is present');
       });
     });
   }
