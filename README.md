@@ -46,4 +46,10 @@ It conforms the Ethereum `ERC-20` token standard, it encapsulates:
 
 It is the lower level details contract, it is being used to handle transactions from the user accounts, and it will utilize the `token contract`.
 
-- Responsible for `doing transfers for Users` by calling token contract on their behaves.
+Responsible for `doing transfers for Users` by calling token contract on their behaves:
+
+- `Deposit` token or Ether
+- `Withdraw` token or Ether
+- `Create` order to actually exchange from Ether to token or vice versa.
+- `Cancel` an order created by `myself`
+- `Get balance` of `myself` as a user
